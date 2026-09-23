@@ -5,10 +5,12 @@ readonly distro_alias="ubuntu-gnome-2404"
 readonly display_number="3"
 readonly vnc_port="5903"
 readonly geometry="${GNOME_VNC_GEOMETRY:-1280x720}"
-readonly virgl_binary="/data/data/com.termux/files/usr/bin/virgl_test_server_android"
-readonly virgl_socket="/data/data/com.termux/files/usr/tmp/.virgl_test"
+readonly termux_prefix="/data/data/com.termux/files/usr"
+readonly rootfs_dir="${termux_prefix}/var/lib/proot-distro/installed-rootfs/${distro_alias}"
+readonly virgl_binary="${termux_prefix}/bin/virgl_test_server_android"
+readonly virgl_socket="${termux_prefix}/tmp/.virgl_test"
 readonly gui_state="$HOME/.local/state/gnome-shell-ubuntu-2404"
-readonly guest_vnc_dir="/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/${distro_alias}/home/desktop/.vnc"
+readonly guest_vnc_dir="${rootfs_dir}/home/desktop/.vnc"
 
 mkdir -p "$gui_state"
 
@@ -18,26 +20,36 @@ tcp_ready() {
         >/dev/null 2>&1
 }
 
+terminate_isolated_processes() {
+    local signal_name="$1"
+    pkill "-$signal_name" -f "$rootfs_dir" >/dev/null 2>&1 || true
+}
+
 if tcp_ready; then
     printf '%s\n' "GNOME Shell is already reachable at localhost:$vnc_port"
     exit 0
 fi
+
+# A failed PRoot session can leave every daemon alive because the login uses
+# --no-kill-on-exit. Clear processes belonging to this dedicated rootfs before
+# relaunching. The original Ubuntu/XFCE rootfs has a different path.
+terminate_isolated_processes TERM
+sleep 2
+terminate_isolated_processes KILL
 
 : >"$gui_state/server.log"
 : >"$gui_state/virgl.log"
 
 graphics_mode="software"
 if [ "${GNOME_VNC_GPU:-0}" = 1 ] && [ -x "$virgl_binary" ]; then
-    if ! pgrep -f '(^|/)virgl_test_server_android([[:space:]]|$)' \
-        >/dev/null 2>&1; then
+    if ! pgrep -f '(^|/)virgl_test_server_android([[:space:]]|$)' >/dev/null 2>&1; then
         rm -f "$virgl_socket"
-        nohup "$virgl_binary" --no-fork \
-            >"$gui_state/virgl.log" 2>&1 </dev/null &
+        nohup "$virgl_binary" --no-fork >"$gui_state/virgl.log" 2>&1 </dev/null &
     fi
 
     for _attempt in $(seq 1 10); do
-        if pgrep -f '(^|/)virgl_test_server_android([[:space:]]|$)' \
-            >/dev/null 2>&1 && [ -S "$virgl_socket" ]; then
+        if pgrep -f '(^|/)virgl_test_server_android([[:space:]]|$)' >/dev/null 2>&1 \
+            && [ -S "$virgl_socket" ]; then
             graphics_mode="virgl"
             break
         fi
@@ -47,9 +59,6 @@ fi
 
 printf 'GNOME graphics mode: %s\n' "$graphics_mode"
 
-# GNOME Shell selects logind merely when this empty systemd runtime marker
-# exists. PRoot has no system bus or logind, so remove the marker and let
-# GNOME use its built-in non-systemd login manager.
 timeout 10 proot-distro login "$distro_alias" \
     --shared-tmp \
     -- /bin/bash -c \
@@ -82,8 +91,6 @@ exec tigervncserver :${display_number} \\
 
 for _attempt in $(seq 1 45); do
     if tcp_ready; then
-        # GNOME starts after the VNC listener. Require the port to survive its
-        # initialization window before reporting a usable desktop.
         sleep 8
         if tcp_ready; then
             printf '%s\n' "GNOME Shell is running at localhost:$vnc_port"

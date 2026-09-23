@@ -2,17 +2,16 @@
 set -u
 
 readonly distro_alias="ubuntu-gnome-2404"
-readonly legacy_rfb_port="5904"
 readonly x_display="4"
 readonly termux_prefix="/data/data/com.termux/files/usr"
+readonly rootfs_dir="${termux_prefix}/var/lib/proot-distro/installed-rootfs/${distro_alias}"
 readonly state_dir="$HOME/.local/state/gnome-shell-termux-x11"
 
-timeout 15 proot-distro login "$distro_alias" \
-    --shared-tmp \
-    --user desktop \
-    -- /bin/bash -c \
-        "pkill -f 'x11vnc.*-rfbport ${legacy_rfb_port}' 2>/dev/null || true; pkill -f gnome-shell-proot-session 2>/dev/null || true" \
-    >/dev/null 2>&1 || true
+# The isolated rootfs is dedicated to this GNOME desktop. Kill all of its
+# PRoot-translated processes, including children retained by --no-kill-on-exit.
+pkill -TERM -f "$rootfs_dir" >/dev/null 2>&1 || true
+sleep 2
+pkill -KILL -f "$rootfs_dir" >/dev/null 2>&1 || true
 
 for pid_file in "$state_dir/x11vnc.pid" "$state_dir/gnome.pid" \
     "$state_dir/termux-x11.pid"; do
