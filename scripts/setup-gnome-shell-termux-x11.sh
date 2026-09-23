@@ -39,13 +39,13 @@ if ! /system/bin/pm list packages 2>/dev/null | grep -qx 'package:com.termux.x11
     exit 1
 fi
 
-printf '%s\n' "Installing the x11vnc capture layer inside $distro_alias"
+printf '%s\n' "Verifying X11 diagnostics inside $distro_alias"
 proot-distro login "$distro_alias" --shared-tmp -- /bin/bash -s <<'GUEST_ROOT'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 dpkg --configure -a
 apt-get update
-apt-get install -y --no-install-recommends x11vnc x11-utils
+apt-get install -y --no-install-recommends x11-utils
 GUEST_ROOT
 
 install -m 700 \
@@ -59,4 +59,4 @@ printf '%s\n' \
     "Accelerated Termux:X11 mode is ready." \
     "Start it from native Termux with: ugnomex11" \
     "Stop it with: ugnomex11stop" \
-    "Its remote capture listens only on localhost:5904."
+    "View the Termux:X11 Android surface from Windows with scrcpy."

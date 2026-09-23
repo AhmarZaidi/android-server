@@ -1,105 +1,73 @@
 # Isolated Ubuntu 24.04 GNOME Shell
 
-This trial installs a separate Ubuntu 24.04.5 LTS ARM64 rootfs under the
-`ubuntu-gnome-2404` alias. It does not install packages in, edit, stop, or
-remove the existing `ubuntu` environment. The current XFCE session remains on
-display `:1` / port `5901`; the installed GNOME Flashback trial remains on
-display `:2` / port `5902`.
+This setup installs a separate Ubuntu 24.04.5 LTS ARM64 rootfs under the `ubuntu-gnome-2404` alias. It does not modify the original Ubuntu/XFCE environment. XFCE remains on display `:1` and GNOME Flashback remains on display `:2`.
 
-The first transport test uses TigerVNC on display `:3` / port `5903`. The
-session runs GNOME Shell 46 in X11 mode with Activities, the overview, dynamic
-workspaces, the Ubuntu dock, GNOME Settings, Nautilus, and GNOME Terminal.
-TigerVNC defaults to Mesa software rendering because GNOME Shell compositing
-through VirGL does not publish framebuffer updates to Xvnc and produces a
-black remote screen. The default framebuffer is 1280x720 at scale 1 to avoid
-client-side downscaling. A different launch size can be tested with, for
-example, `GNOME_VNC_GEOMETRY=1920x1080 ugnomefull`.
+The dependable desktop path is GNOME Shell 46 in X11 mode through TigerVNC on display `:3`, localhost port `5903`. It uses Mesa software rendering because GNOME compositing through VirGL did not produce a capturable framebuffer in either Xvnc or Termux:X11 on this device.
 
-## Resource estimate
+## Install or refresh
 
-- Download and installation: usually 45–90 minutes on this device and network.
-- Final disk use: approximately 2–3.5 GiB.
-- Required free-space safety margin: 6 GiB.
-- The environment has its own installed packages and system configuration.
-  Selected project directories can be bind-mounted later, after the desktop
-  transport is stable.
-
-The installer uses the official
-[Ubuntu Base 24.04.5 ARM64 archive](https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/)
-and pins its SHA-256 checksum. The desktop is Ubuntu Noble's
-[GNOME Shell package](https://packages.ubuntu.com/noble/arm64/gnome-shell).
-
-## Install
-
-All commands in this section run in **native Termux**, where `whoami` returns
-the Android app user (for example `u0_a468`) and `$PREFIX` is
-`/data/data/com.termux/files/usr`.
+Run in native Termux:
 
 ```bash
 cd ~/gnome-shell-2404
 ./setup-gnome-shell-ubuntu-2404.sh
 ```
 
-The script checks for at least 6 GiB free, refuses to touch an unknown rootfs,
-and asks native Termux for a dedicated 6-8 character VNC password near the
-end. Native Termux handles the prompt because PRoot cannot read `/dev/tty`
-reliably. It is safe to rerun after a completed or interrupted desktop package
-installation; it resumes only when its marker exists.
+The installer is resumable. On an existing environment it refreshes the GNOME startup wrapper, installs the complete Yaru and Adwaita icon sets plus Ubuntu, Cantarell, and emoji fonts, rebuilds their caches, and preserves the existing VNC password.
 
-## Start and connect
+## Start and stop
 
-From native Termux:
+Run in native Termux:
 
 ```bash
 ugnomefull
 ```
 
-The server binds only to `localhost:5903`. Continue using the SSH port forward
-from the laptop, changing its target to port `5903`, then connect the VNC
-client to `localhost:5903`.
-
-Stop only this GNOME session with:
+Stop only this session with:
 
 ```bash
 ugnomefullstop
 ```
 
-The VNC launcher reports `GNOME graphics mode: software`. The incompatible
-VirGL/Xvnc path remains available only for diagnostics with
-`GNOME_VNC_GPU=1 ugnomefull`; it should not be used as a desktop mode. VirGL
-will instead be used with the separate Termux:X11 transport.
-
-XFCE and this session use separate VNC displays and may run at the same time.
-They still share the phone's CPU, RAM, GPU, and thermal limits, so simultaneous
-use can reduce performance.
-
-If startup fails, inspect the native launcher log:
+The default framebuffer is 1280x720 at 96 DPI and scale 1. Override it for a launch with, for example:
 
 ```bash
-cat ~/.local/state/gnome-shell-ubuntu-2404/server.log
+GNOME_VNC_GEOMETRY=1920x1080 ugnomefull
 ```
 
-The launcher also prints the end of TigerVNC's guest log after a failed start.
+## TigerVNC viewer quality
 
-## Complete rollback
+Lossy JPEG encoding and client-side enlargement can make icons look pixelated even when the guest rendered them correctly. For the local SSH-forwarded connection, use full color, Tight encoding, JPEG disabled, and no remote resizing. A ready profile is stored at `config/tigervnc/gnome-local.tigervnc`.
 
-Stop and remove only the isolated environment from native Termux:
+Equivalent viewer options are:
+
+```text
+Auto select: off
+Encoding: Tight
+Color level: Full
+Custom compression: on, level 1
+Allow JPEG compression: off
+Remote resize: off
+```
+
+Display the 1280x720 framebuffer at 100% scale when judging icon sharpness. Increase `GNOME_VNC_GEOMETRY` if a larger native framebuffer is needed.
+
+## Current rendering status
+
+The session explicitly enables GNOME animations, uses the Yaru GTK, shell, cursor, and icon themes, fixes scale and DPI, and enables dynamic workspaces. Animation smoothness remains limited by CPU software rendering and VNC update latency, but transitions should be present rather than disabled.
+
+The Termux:X11 and scrcpy path remains an experimental diagnostic path. It displays the X server cursor but not GNOME Shell's compositor output on this device, so it is not the default.
+
+## Future remote access
+
+The planned transport selector can use the same TigerVNC desktop backend: connect directly over the local SSH tunnel when the phone is reachable, fall back to noVNC through Cloudflare Tunnel when it is not, and accept a flag to force either route for testing.
+
+## Rollback
+
+Run in native Termux:
 
 ```bash
 ugnomefullremove --confirm
 ```
 
-This deletes the `ubuntu-gnome-2404` rootfs and data stored inside it, its
-dedicated `proot-distro` plug-in, three launch commands, and its launcher log.
-It checks the private marker before deletion and refuses an unrecognized
-rootfs. It does not remove either the existing `ubuntu` rootfs or the GNOME
-Flashback packages previously added there.
-
-## Transport fallback
-
-If GNOME Shell itself works but TigerVNC is visually incomplete or too slow,
-keep this rootfs and replace only its display path with Termux:X11 plus VirGL.
-Termux:X11 officially supports PRoot sessions through `--shared-tmp`; remote
-access can then be layered through `x11vnc` or Android screen streaming. That
-phase is intentionally deferred until the VNC result is measured, so the first
-test adds no Android app, display service, or remote-access dependency.
+This removes only the isolated `ubuntu-gnome-2404` environment and its launchers.

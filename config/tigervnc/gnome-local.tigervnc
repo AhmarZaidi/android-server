@@ -1,0 +1,16 @@
+TigerVNC Configuration file Version 1.0
+
+ServerName=localhost::5903
+AutoSelect=0
+FullColor=1
+PreferredEncoding=Tight
+CustomCompressLevel=1
+CompressLevel=1
+NoJPEG=1
+QualityLevel=9
+RemoteResize=0
+ViewOnly=0
+Shared=1
+AcceptClipboard=1
+SendClipboard=1
+MenuKey=F8

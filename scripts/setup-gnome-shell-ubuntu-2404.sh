@@ -12,15 +12,13 @@ tracer_pid=$(awk '/^TracerPid:/ { print $2 }' "/proc/$$/status")
 if [ "${tracer_pid:-0}" != 0 ]; then
     tracer_name=$(awk '/^Name:/ { print $2 }' "/proc/${tracer_pid}/status")
     if [ "$tracer_name" = "proot" ]; then
-        printf '%s\n' \
-            "Run this script from native Termux, outside every PRoot environment." >&2
+        printf '%s\n' "Run this script from native Termux, outside every PRoot environment." >&2
         exit 1
     fi
 fi
 
 if [ "${PREFIX:-}" != "$termux_prefix" ]; then
-    printf '%s\n' \
-        "Run this script from native Termux, outside every PRoot environment." >&2
+    printf '%s\n' "Run this script from native Termux, outside every PRoot environment." >&2
     exit 1
 fi
 
@@ -42,20 +40,16 @@ done
 
 available_kb=$(df -Pk "$termux_prefix" | awk 'NR == 2 { print $4 }')
 if [ -z "$available_kb" ] || [ "$available_kb" -lt 6291456 ]; then
-    printf '%s\n' \
-        "At least 6 GiB of free storage is required for this isolated setup." >&2
+    printf '%s\n' "At least 6 GiB of free storage is required for this isolated setup." >&2
     exit 1
 fi
 
 if [ -d "$rootfs_dir" ] && [ ! -f "$rootfs_dir/$marker_name" ]; then
-    printf '%s\n' \
-        "Refusing to modify existing unrecognized environment: $rootfs_dir" >&2
+    printf '%s\n' "Refusing to modify existing unrecognized environment: $rootfs_dir" >&2
     exit 1
 fi
 
-install -m 600 \
-    "$script_dir/proot-distro-ubuntu-gnome-2404.sh" \
-    "$plugin_file"
+install -m 600 "$script_dir/proot-distro-ubuntu-gnome-2404.sh" "$plugin_file"
 
 if [ ! -d "$rootfs_dir" ]; then
     printf '%s\n' \
@@ -67,7 +61,7 @@ else
     printf '%s\n' "Resuming recognized environment: $distro_alias"
 fi
 
-printf '%s\n' "Installing GNOME Shell 46 and TigerVNC inside $distro_alias"
+printf '%s\n' "Installing and configuring GNOME Shell 46 and TigerVNC inside $distro_alias"
 proot-distro login "$distro_alias" --shared-tmp -- /bin/bash -s <<'GUEST_ROOT'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -75,10 +69,14 @@ export DEBIAN_FRONTEND=noninteractive
 dpkg --configure -a
 apt-get update
 apt-get install -y --no-install-recommends \
+    adwaita-icon-theme-full \
     at-spi2-core \
     dbus-x11 \
     dconf-cli \
+    fonts-cantarell \
     fonts-dejavu-core \
+    fonts-noto-color-emoji \
+    fonts-ubuntu \
     gnome-backgrounds \
     gnome-control-center \
     gnome-keyring \
@@ -99,35 +97,29 @@ apt-get install -y --no-install-recommends \
     yaru-theme-gtk \
     yaru-theme-icon
 
-id desktop >/dev/null 2>&1 || \
-    adduser --disabled-password --gecos '' desktop
+id desktop >/dev/null 2>&1 || adduser --disabled-password --gecos '' desktop
 
 install -d -o desktop -g desktop -m 700 \
     /home/desktop/.vnc \
     /home/desktop/.local/bin \
     /home/desktop/.runtime-gnome-shell
+
+gtk-update-icon-cache -f /usr/share/icons/Yaru >/dev/null 2>&1 || true
+gtk-update-icon-cache -f /usr/share/icons/Adwaita >/dev/null 2>&1 || true
+fc-cache -f >/dev/null 2>&1 || true
 GUEST_ROOT
 
 printf '%s\n' "Configuring the GNOME Shell VNC session"
 proot-distro login "$distro_alias" --shared-tmp --user desktop -- /bin/bash -s <<'GUEST_USER'
 set -euo pipefail
 
-mkdir -p \
-    "$HOME/.vnc" \
-    "$HOME/.local/bin" \
-    "$HOME/.runtime-gnome-shell"
-chmod 700 \
-    "$HOME/.vnc" \
-    "$HOME/.local/bin" \
-    "$HOME/.runtime-gnome-shell"
+mkdir -p "$HOME/.vnc" "$HOME/.local/bin" "$HOME/.runtime-gnome-shell"
+chmod 700 "$HOME/.vnc" "$HOME/.local/bin" "$HOME/.runtime-gnome-shell"
 
 cat >"$HOME/.local/bin/gnome-shell-proot-session" <<'SESSION'
 #!/bin/bash
 set -u
 
-# A normal GNOME session expects a systemd user manager and a system D-Bus.
-# PRoot provides neither, so start GNOME Shell and its essential settings
-# components directly inside the VNC session's private D-Bus.
 child_pids=()
 cleaned_up=0
 
@@ -149,9 +141,6 @@ cleanup() {
 
 trap cleanup EXIT HUP INT TERM
 
-# Several GNOME Shell components create proxies on the system bus even when
-# their services are optional. Provide an empty private bus so proxy creation
-# succeeds and unavailable services fail normally instead of aborting the UI.
 system_bus_socket="$XDG_RUNTIME_DIR/gnome-proot-system-bus"
 rm -f "$system_bus_socket"
 system_bus_pid=$(dbus-daemon \
@@ -163,9 +152,23 @@ system_bus_pid=$(dbus-daemon \
 export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus_socket"
 child_pids+=("$system_bus_pid")
 
+# Make the desktop deterministic. These values also repair incomplete theme
+# fallbacks and explicitly re-enable the motion GNOME uses for its overview
+# and workspace transitions.
+gsettings set org.gnome.desktop.interface enable-animations true >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface gtk-theme 'Yaru' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface icon-theme 'Yaru' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface font-name 'Ubuntu 11' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface document-font-name 'Sans 11' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface monospace-font-name 'Ubuntu Mono 13' >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface text-scaling-factor 1.0 >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface scaling-factor 1 >/dev/null 2>&1 || true
 gsettings set org.gnome.mutter dynamic-workspaces true >/dev/null 2>&1 || true
-gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true \
-    >/dev/null 2>&1 || true
+gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true >/dev/null 2>&1 || true
+
+xrandr --dpi 96 >/dev/null 2>&1 || true
+xsetroot -solid '#1a1b26' >/dev/null 2>&1 || true
 
 start_component /usr/libexec/gsd-xsettings
 start_component /usr/libexec/gsd-keyboard
@@ -186,6 +189,9 @@ export XDG_SESSION_DESKTOP=ubuntu
 export DESKTOP_SESSION=ubuntu
 export GNOME_SHELL_SESSION_MODE=ubuntu
 export GDK_BACKEND=x11
+export GDK_SCALE=1
+export GDK_DPI_SCALE=1
+export XCURSOR_SIZE=24
 if [ "${GNOME_GFX_MODE:-software}" = virgl ]; then
     unset LIBGL_ALWAYS_SOFTWARE
     export GALLIUM_DRIVER=virpipe
@@ -215,38 +221,26 @@ if [ ! -s "$guest_passwd_file" ]; then
         printf '\n'
         IFS= read -r -s -p "Confirm password: " vnc_password_confirm
         printf '\n'
-
         if [ "$vnc_password" != "$vnc_password_confirm" ]; then
             printf '%s\n' "Passwords do not match; try again." >&2
             continue
         fi
-
         if [ "${#vnc_password}" -lt 6 ] || [ "${#vnc_password}" -gt 8 ]; then
             printf '%s\n' "Use between 6 and 8 characters." >&2
             continue
         fi
-
         break
     done
 
     printf '%s\n' "$vnc_password" | \
-        proot-distro login "$distro_alias" \
-            --shared-tmp \
-            --user desktop \
-            -- /bin/bash -c \
-                'umask 077; tigervncpasswd -f >"$HOME/.vnc/passwd"'
+        proot-distro login "$distro_alias" --shared-tmp --user desktop -- \
+            /bin/bash -c 'umask 077; tigervncpasswd -f >"$HOME/.vnc/passwd"'
     unset vnc_password vnc_password_confirm
 fi
 
-install -m 700 \
-    "$script_dir/gnome-shell-ubuntu-2404-start.sh" \
-    "$termux_prefix/bin/ugnomefull"
-install -m 700 \
-    "$script_dir/gnome-shell-ubuntu-2404-stop.sh" \
-    "$termux_prefix/bin/ugnomefullstop"
-install -m 700 \
-    "$script_dir/gnome-shell-ubuntu-2404-remove.sh" \
-    "$termux_prefix/bin/ugnomefullremove"
+install -m 700 "$script_dir/gnome-shell-ubuntu-2404-start.sh" "$termux_prefix/bin/ugnomefull"
+install -m 700 "$script_dir/gnome-shell-ubuntu-2404-stop.sh" "$termux_prefix/bin/ugnomefullstop"
+install -m 700 "$script_dir/gnome-shell-ubuntu-2404-remove.sh" "$termux_prefix/bin/ugnomefullremove"
 
 printf '%s\n' \
     "Isolated GNOME Shell setup is ready." \

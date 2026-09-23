@@ -3,7 +3,6 @@ set -euo pipefail
 
 readonly distro_alias="ubuntu-gnome-2404"
 readonly x_display="4"
-readonly rfb_port="5904"
 readonly software_vnc_port="5903"
 readonly geometry="${GNOME_X11_GEOMETRY:-1280x720}"
 readonly termux_prefix="/data/data/com.termux/files/usr"
@@ -19,6 +18,14 @@ tcp_ready() {
         >/dev/null 2>&1
 }
 
+pid_file_alive() {
+    local pid_file="$1"
+    local pid
+    [ -s "$pid_file" ] || return 1
+    pid=$(cat "$pid_file")
+    kill -0 "$pid" >/dev/null 2>&1
+}
+
 if tcp_ready "$software_vnc_port"; then
     printf '%s\n' \
         "The software VNC session is running on port $software_vnc_port." \
@@ -26,8 +33,14 @@ if tcp_ready "$software_vnc_port"; then
     exit 1
 fi
 
-if tcp_ready "$rfb_port"; then
-    printf '%s\n' "Accelerated GNOME is already reachable at localhost:$rfb_port"
+if pid_file_alive "$state_dir/termux-x11.pid" \
+    && pid_file_alive "$state_dir/gnome.pid" \
+    && grep -q 'Running GNOME Shell' "$state_dir/gnome.log" 2>/dev/null; then
+    am start --user 0 -n com.termux.x11/.MainActivity >/dev/null 2>&1 || true
+    printf '%s\n' \
+        "Accelerated GNOME is already running in the Termux:X11 Android app." \
+        "Display path: GNOME -> VirGL -> Termux:X11 -> scrcpy" \
+        "ADB endpoint: 192.168.31.249:5555"
     exit 0
 fi
 
@@ -37,12 +50,13 @@ fi
 termux-x11-preference \
     displayResolutionMode:custom \
     "displayResolutionCustom:$geometry" \
-    displayStretch:false >/dev/null
+    displayStretch:false \
+    forceOrientation:landscape \
+    showAdditionalKbd:false >/dev/null
 
 : >"$state_dir/termux-x11.log"
 : >"$state_dir/virgl.log"
 : >"$state_dir/gnome.log"
-: >"$state_dir/x11vnc.log"
 
 if ! pgrep -f '(^|/)virgl_test_server_android([[:space:]]|$)' \
     >/dev/null 2>&1; then
@@ -65,8 +79,14 @@ if [ ! -S "$virgl_socket" ]; then
     exit 1
 fi
 
-if [ ! -S "$x_socket" ]; then
-    nohup termux-x11 ":${x_display}" -ac -noreset \
+x_server_alive=0
+if pid_file_alive "$state_dir/termux-x11.pid"; then
+    x_server_alive=1
+fi
+
+if [ "$x_server_alive" -eq 0 ]; then
+    rm -f "$x_socket" "${termux_prefix}/tmp/.X${x_display}-lock"
+    nohup termux-x11 ":${x_display}" -ac -noreset -legacy-drawing \
         >"$state_dir/termux-x11.log" 2>&1 </dev/null &
     printf '%s\n' "$!" >"$state_dir/termux-x11.pid"
 fi
@@ -110,41 +130,19 @@ printf '%s\n' "$!" >"$state_dir/gnome.pid"
 
 sleep 12
 
-nohup proot-distro login "$distro_alias" \
-    --shared-tmp \
-    --user desktop \
-    --no-kill-on-exit \
-    --no-sysvipc \
-    -- /bin/bash -lc "
-exec x11vnc \
-  -display :${x_display} \
-  -rfbport ${rfb_port} \
-  -rfbauth \"\$HOME/.vnc/passwd\" \
-  -localhost \
-  -forever \
-  -shared \
-  -noxdamage \
-  -repeat \
-  -quiet
-" >"$state_dir/x11vnc.log" 2>&1 </dev/null &
-printf '%s\n' "$!" >"$state_dir/x11vnc.pid"
-
-for _attempt in $(seq 1 20); do
-    if tcp_ready "$rfb_port"; then
-        sleep 5
-        if tcp_ready "$rfb_port"; then
-            printf '%s\n' \
-                "Accelerated GNOME is running at localhost:$rfb_port" \
-                "Display path: GNOME -> VirGL -> Termux:X11 -> x11vnc"
-            exit 0
-        fi
-        break
-    fi
-    sleep 1
-done
+if pid_file_alive "$state_dir/termux-x11.pid" \
+    && pid_file_alive "$state_dir/gnome.pid" \
+    && grep -q 'Running GNOME Shell' "$state_dir/gnome.log" 2>/dev/null; then
+    am start --user 0 -n com.termux.x11/.MainActivity >/dev/null 2>&1 || true
+    printf '%s\n' \
+        "Accelerated GNOME is running in the Termux:X11 Android app." \
+        "Display path: GNOME -> VirGL -> Termux:X11 -> scrcpy" \
+        "ADB endpoint: 192.168.31.249:5555"
+    exit 0
+fi
 
 printf '%s\n' "Accelerated GNOME failed to start." >&2
-for log_file in termux-x11.log virgl.log gnome.log x11vnc.log; do
+for log_file in termux-x11.log virgl.log gnome.log; do
     printf '\n== %s ==\n' "$log_file" >&2
     tail -n 100 "$state_dir/$log_file" >&2 || true
 done
