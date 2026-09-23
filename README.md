@@ -27,6 +27,7 @@ TigerVNC listens only on the phone's local interface. The Windows computer reach
 
 ## Documentation
 
+- [Backup and recovery](docs/backup-and-restore.md) — full baseline, verification and rollback; complete before stability changes
 - [Complete setup guide](docs/termux-proot-ubuntu-xfce-vnc-guide.md) — one-time installation, configuration, appearance, shortcuts, security notes, and troubleshooting
 - [Daily quick-start guide](docs/sanders-ubuntu-gui-quick-start.md) — the short start, connect, and shutdown routine after setup
 
