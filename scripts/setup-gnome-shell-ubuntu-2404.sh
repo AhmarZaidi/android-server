@@ -149,6 +149,20 @@ cleanup() {
 
 trap cleanup EXIT HUP INT TERM
 
+# Several GNOME Shell components create proxies on the system bus even when
+# their services are optional. Provide an empty private bus so proxy creation
+# succeeds and unavailable services fail normally instead of aborting the UI.
+system_bus_socket="$XDG_RUNTIME_DIR/gnome-proot-system-bus"
+rm -f "$system_bus_socket"
+system_bus_pid=$(dbus-daemon \
+    --session \
+    --address="unix:path=$system_bus_socket" \
+    --fork \
+    --nopidfile \
+    --print-pid=1)
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus_socket"
+child_pids+=("$system_bus_pid")
+
 gsettings set org.gnome.mutter dynamic-workspaces true >/dev/null 2>&1 || true
 gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true \
     >/dev/null 2>&1 || true
@@ -172,7 +186,17 @@ export XDG_SESSION_DESKTOP=ubuntu
 export DESKTOP_SESSION=ubuntu
 export GNOME_SHELL_SESSION_MODE=ubuntu
 export GDK_BACKEND=x11
-export LIBGL_ALWAYS_SOFTWARE=1
+if [ "${GNOME_GFX_MODE:-software}" = virgl ]; then
+    unset LIBGL_ALWAYS_SOFTWARE
+    export GALLIUM_DRIVER=virpipe
+    export MESA_GL_VERSION_OVERRIDE=4.0
+    export MESA_GLSL_VERSION_OVERRIDE=400
+else
+    unset GALLIUM_DRIVER
+    unset MESA_GL_VERSION_OVERRIDE
+    unset MESA_GLSL_VERSION_OVERRIDE
+    export LIBGL_ALWAYS_SOFTWARE=1
+fi
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 exec dbus-run-session -- "$HOME/.local/bin/gnome-shell-proot-session"

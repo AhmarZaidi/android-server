@@ -9,8 +9,11 @@ display `:2` / port `5902`.
 The first transport test uses TigerVNC on display `:3` / port `5903`. The
 session runs GNOME Shell 46 in X11 mode with Activities, the overview, dynamic
 workspaces, the Ubuntu dock, GNOME Settings, Nautilus, and GNOME Terminal.
-Software rendering is enabled initially because it is the safest baseline in
-Android PRoot.
+TigerVNC defaults to Mesa software rendering because GNOME Shell compositing
+through VirGL does not publish framebuffer updates to Xvnc and produces a
+black remote screen. The default framebuffer is 1280x720 at scale 1 to avoid
+client-side downscaling. A different launch size can be tested with, for
+example, `GNOME_VNC_GEOMETRY=1920x1080 ugnomefull`.
 
 ## Resource estimate
 
@@ -60,6 +63,11 @@ Stop only this GNOME session with:
 ```bash
 ugnomefullstop
 ```
+
+The VNC launcher reports `GNOME graphics mode: software`. The incompatible
+VirGL/Xvnc path remains available only for diagnostics with
+`GNOME_VNC_GPU=1 ugnomefull`; it should not be used as a desktop mode. VirGL
+will instead be used with the separate Termux:X11 transport.
 
 XFCE and this session use separate VNC displays and may run at the same time.
 They still share the phone's CPU, RAM, GPU, and thermal limits, so simultaneous
