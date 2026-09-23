@@ -17,16 +17,20 @@ The installer keeps one backup of the previous launchers under `~/.local/state/u
 After stopping the current session, start one of:
 
 ```bash
-ugui smooth    # 1280x720, best responsiveness
-ugui balanced  # 1600x900, previous resolution
+ugui ultra     # 1024x576, 16-bit color, highest responsiveness
+ugui smooth    # 1280x720, 24-bit color
+ugui balanced  # 1600x900, previous resolution and default
 ugui quality   # 1920x1080, highest pixel cost
 ```
 
-All profiles use 24-bit color, TigerVNC's 60-update-per-second ceiling, and automatic framebuffer comparison. `XFCE_VNC_GEOMETRY` and `XFCE_VNC_FPS` can override these values for a test.
+All profiles use TigerVNC's 60-update-per-second ceiling and automatic framebuffer comparison. `XFCE_VNC_GEOMETRY`, `XFCE_VNC_DEPTH`, and `XFCE_VNC_FPS` can override the selected values for a test.
+
+The ultra profile processes 36% fewer pixels than smooth and about 59% fewer than balanced. Its 16-bit RGB565 framebuffer further reduces memory bandwidth, with possible color banding on gradients.
 
 ## Windows viewer profiles
 
-- `config/tigervnc/xfce-smooth.tigervnc` uses Tight encoding with JPEG quality 7. It is intended for scrolling and interactive work.
+- `config/tigervnc/xfce-ultra.tigervnc` uses Tight encoding, compression level 0, JPEG quality 5, and a 10 ms pointer interval.
+- `config/tigervnc/xfce-smooth.tigervnc` uses Tight encoding with JPEG quality 7.
 - `config/tigervnc/xfce-sharp.tigervnc` disables JPEG for crisp text and icons at the cost of more traffic and potentially lower scrolling performance.
 
 Do not add SSH compression (`ssh -C`) to the tunnel. VNC already compresses its framebuffer, and recompressing it adds latency and CPU work.

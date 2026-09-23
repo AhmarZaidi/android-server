@@ -31,6 +31,7 @@ install -m 700 "$script_dir/xfce-vnc-stop.sh" "$target_dir/ubuntu-gui-stop"
 
 printf '%s\n' \
     "XFCE VNC profiles installed." \
-    "Use: ugui smooth" \
+    "Use: ugui ultra" \
+    "     ugui smooth" \
     "     ugui balanced" \
     "     ugui quality"
