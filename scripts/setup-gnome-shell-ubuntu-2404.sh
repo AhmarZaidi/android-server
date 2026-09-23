@@ -103,7 +103,7 @@ id desktop >/dev/null 2>&1 || \
     adduser --disabled-password --gecos '' desktop
 
 install -d -o desktop -g desktop -m 700 \
-    /home/desktop/.config/tigervnc \
+    /home/desktop/.vnc \
     /home/desktop/.local/bin \
     /home/desktop/.runtime-gnome-shell
 GUEST_ROOT
@@ -113,11 +113,11 @@ proot-distro login "$distro_alias" --shared-tmp --user desktop -- /bin/bash -s <
 set -euo pipefail
 
 mkdir -p \
-    "$HOME/.config/tigervnc" \
+    "$HOME/.vnc" \
     "$HOME/.local/bin" \
     "$HOME/.runtime-gnome-shell"
 chmod 700 \
-    "$HOME/.config/tigervnc" \
+    "$HOME/.vnc" \
     "$HOME/.local/bin" \
     "$HOME/.runtime-gnome-shell"
 
@@ -125,17 +125,43 @@ cat >"$HOME/.local/bin/gnome-shell-proot-session" <<'SESSION'
 #!/bin/bash
 set -u
 
-# GNOME's complete X11 session provides Activities, the overview, dynamic
-# workspaces, the Ubuntu dock, settings integration, and GNOME Shell itself.
+# A normal GNOME session expects a systemd user manager and a system D-Bus.
+# PRoot provides neither, so start GNOME Shell and its essential settings
+# components directly inside the VNC session's private D-Bus.
+child_pids=()
+cleaned_up=0
+
+start_component() {
+    if [ -x "$1" ]; then
+        "$@" &
+        child_pids+=("$!")
+    fi
+}
+
+cleanup() {
+    [ "$cleaned_up" -eq 0 ] || return 0
+    cleaned_up=1
+    if [ "${#child_pids[@]}" -gt 0 ]; then
+        kill "${child_pids[@]}" >/dev/null 2>&1 || true
+        wait "${child_pids[@]}" >/dev/null 2>&1 || true
+    fi
+}
+
+trap cleanup EXIT HUP INT TERM
+
 gsettings set org.gnome.mutter dynamic-workspaces true >/dev/null 2>&1 || true
 gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true \
     >/dev/null 2>&1 || true
 
-exec gnome-session --session=ubuntu
+start_component /usr/libexec/gsd-xsettings
+start_component /usr/libexec/gsd-keyboard
+start_component /usr/libexec/gsd-media-keys
+
+gnome-shell --x11 --replace
 SESSION
 chmod 700 "$HOME/.local/bin/gnome-shell-proot-session"
 
-cat >"$HOME/.config/tigervnc/xstartup" <<'XSTARTUP'
+cat >"$HOME/.vnc/xstartup" <<'XSTARTUP'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
@@ -151,13 +177,42 @@ mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 exec dbus-run-session -- "$HOME/.local/bin/gnome-shell-proot-session"
 XSTARTUP
-chmod 700 "$HOME/.config/tigervnc/xstartup"
-
-if [ ! -s "$HOME/.config/tigervnc/passwd" ]; then
-    printf '%s\n' "Create a password for the isolated GNOME VNC server."
-    tigervncpasswd
-fi
+chmod 700 "$HOME/.vnc/xstartup"
 GUEST_USER
+
+guest_passwd_file="$rootfs_dir/home/desktop/.vnc/passwd"
+if [ ! -s "$guest_passwd_file" ]; then
+    printf '%s\n' \
+        "Create a 6-8 character password for the isolated GNOME VNC server." \
+        "Input is read by native Termux because PRoot cannot access /dev/tty directly."
+
+    while true; do
+        IFS= read -r -s -p "VNC password: " vnc_password
+        printf '\n'
+        IFS= read -r -s -p "Confirm password: " vnc_password_confirm
+        printf '\n'
+
+        if [ "$vnc_password" != "$vnc_password_confirm" ]; then
+            printf '%s\n' "Passwords do not match; try again." >&2
+            continue
+        fi
+
+        if [ "${#vnc_password}" -lt 6 ] || [ "${#vnc_password}" -gt 8 ]; then
+            printf '%s\n' "Use between 6 and 8 characters." >&2
+            continue
+        fi
+
+        break
+    done
+
+    printf '%s\n' "$vnc_password" | \
+        proot-distro login "$distro_alias" \
+            --shared-tmp \
+            --user desktop \
+            -- /bin/bash -c \
+                'umask 077; tigervncpasswd -f >"$HOME/.vnc/passwd"'
+    unset vnc_password vnc_password_confirm
+fi
 
 install -m 700 \
     "$script_dir/gnome-shell-ubuntu-2404-start.sh" \

@@ -38,8 +38,10 @@ cd ~/gnome-shell-2404
 ```
 
 The script checks for at least 6 GiB free, refuses to touch an unknown rootfs,
-and asks for a dedicated VNC password near the end. It is safe to rerun after
-a completed installation; it resumes only when its marker exists.
+and asks native Termux for a dedicated 6-8 character VNC password near the
+end. Native Termux handles the prompt because PRoot cannot read `/dev/tty`
+reliably. It is safe to rerun after a completed or interrupted desktop package
+installation; it resumes only when its marker exists.
 
 ## Start and connect
 

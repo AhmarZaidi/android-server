@@ -5,7 +5,7 @@ readonly distro_alias="ubuntu-gnome-2404"
 readonly display_number="3"
 readonly vnc_port="5903"
 readonly gui_state="$HOME/.local/state/gnome-shell-ubuntu-2404"
-readonly guest_vnc_dir="/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/${distro_alias}/home/desktop/.config/tigervnc"
+readonly guest_vnc_dir="/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/${distro_alias}/home/desktop/.vnc"
 
 mkdir -p "$gui_state"
 
