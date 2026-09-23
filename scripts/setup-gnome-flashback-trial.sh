@@ -7,6 +7,16 @@ readonly termux_prefix="/data/data/com.termux/files/usr"
 readonly rootfs_dir="${termux_prefix}/var/lib/proot-distro/installed-rootfs/${distro_alias}"
 readonly script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
 
+tracer_pid=$(awk '/^TracerPid:/ { print $2 }' "/proc/$$/status")
+if [ "${tracer_pid:-0}" != 0 ]; then
+    tracer_name=$(awk '/^Name:/ { print $2 }' "/proc/${tracer_pid}/status")
+    if [ "$tracer_name" = "proot" ]; then
+        printf '%s\n' \
+            "Run this script from native Termux, outside every PRoot environment." >&2
+        exit 1
+    fi
+fi
+
 if [ "${PREFIX:-}" != "$termux_prefix" ]; then
     printf '%s\n' \
         "Run this script from native Termux, outside every PRoot environment." >&2
