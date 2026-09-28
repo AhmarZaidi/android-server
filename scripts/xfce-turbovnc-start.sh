@@ -46,7 +46,8 @@ exec /opt/TurboVNC/bin/vncserver :5 \
   -localhost \
   -geometry 1280x720 \
   -depth 24 \
-  -wm xfce \
+  -deferupdate 16 \
+  -xstartup "$HOME/.vnc/xstartup.turbovnc" \
   -securitytypes VNC \
   -rfbauth "$HOME/.vnc/passwd" \
   -name "Sanders Ubuntu XFCE TurboVNC"

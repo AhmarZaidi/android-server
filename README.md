@@ -27,6 +27,8 @@ TigerVNC listens only on the phone's local interface. The Windows computer reach
 
 ## Documentation
 
+- [Current XFCE setup and recovery map](docs/xfce-setup-state.md) — profiles, experiments, configuration locations and rollback boundaries
+- [Workspace controls](docs/xfce-workspaces.md) — move windows, prevent workspace jumping, and restore previous settings
 - [Backup and recovery](docs/backup-and-restore.md) — full baseline, verification and rollback; complete before stability changes
 - [Complete setup guide](docs/termux-proot-ubuntu-xfce-vnc-guide.md) — one-time installation, configuration, appearance, shortcuts, security notes, and troubleshooting
 - [Daily quick-start guide](docs/sanders-ubuntu-gui-quick-start.md) — the short start, connect, and shutdown routine after setup

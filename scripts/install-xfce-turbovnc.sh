@@ -90,6 +90,17 @@ if [ ! -f "$HOME/.vnc/passwd" ]; then
     fi
 fi
 
+cat > "$HOME/.vnc/xstartup.turbovnc" <<'EOF'
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+export XDG_RUNTIME_DIR="$HOME/.runtime-turbovnc"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+exec dbus-launch --exit-with-session startxfce4
+EOF
+chmod 700 "$HOME/.vnc/xstartup.turbovnc"
+
 native_bin="$termux_home/.local/bin"
 native_state="$termux_home/.local/state/ubuntu-turbovnc"
 mkdir -p "$native_bin" "$native_state/launcher-backup"
